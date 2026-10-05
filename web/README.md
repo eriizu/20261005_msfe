@@ -3,6 +3,8 @@
 React + shadcn/ui frontend for [morningstar_rt](https://github.com/eriizu/morningstar/tree/main/morningstar_rt):
 pick a stop, see its next calls (scheduled time, realtime time and status when
 available, stops to destination). Refreshes every 5 s while the tab is visible.
+A live indicator pulses green on each update, turns orange while a request
+takes over 3 s, and red after a failed one (requests time out after 10 s).
 
 Waits are shown in whole minutes, then "due" under a minute (flashing under
 30 s). A bus whose realtime disappears within 2 minutes of its expected time is

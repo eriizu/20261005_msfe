@@ -5,6 +5,8 @@ export interface PollingState<T> {
   error: Error | undefined
   /** A request is in flight (initial load or refresh). */
   fetching: boolean
+  /** Start of the request in flight. */
+  fetchingSince: number | undefined
   updatedAt: number | undefined
   refresh: () => void
 }
@@ -16,6 +18,7 @@ const initial = <T,>(key: string | null): Snapshot<T> => ({
   data: undefined,
   error: undefined,
   fetching: key !== null,
+  fetchingSince: key !== null ? Date.now() : undefined,
   updatedAt: undefined,
 })
 
@@ -46,12 +49,22 @@ export function usePolling<T>(
       if (inFlight) return
       inFlight = true
       clearTimeout(timer)
-      update((s) => ({ ...s, fetching: true }))
+      const since = Date.now()
+      update((s) => ({ ...s, fetching: true, fetchingSince: since }))
       try {
         const data = await fetch(key)
-        if (!cancelled) update(() => ({ key, data, error: undefined, fetching: false, updatedAt: Date.now() }))
+        if (!cancelled) {
+          update(() => ({
+            key,
+            data,
+            error: undefined,
+            fetching: false,
+            fetchingSince: undefined,
+            updatedAt: Date.now(),
+          }))
+        }
       } catch (err) {
-        if (!cancelled) update((s) => ({ ...s, error: err as Error, fetching: false }))
+        if (!cancelled) update((s) => ({ ...s, error: err as Error, fetching: false, fetchingSince: undefined }))
       }
       inFlight = false
       if (!cancelled && document.visibilityState === "visible") {

@@ -3,6 +3,7 @@ import { AlertCircleIcon, BusFrontIcon, RefreshCwIcon } from "lucide-react"
 
 import { api, StopNotServedError, usingMock } from "@/api"
 import { Departures } from "@/components/departures"
+import { LiveIndicator } from "@/components/live-indicator"
 import { StopPicker } from "@/components/stop-picker"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -70,20 +71,7 @@ export default function App() {
         <StopPicker stops={sortedStops} value={stop} onChange={selectStop} />
         {stop && (
           <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground sm:justify-end">
-            <span className="flex items-center gap-2" aria-live="polite">
-              <span
-                className={cn(
-                  "size-2 rounded-full",
-                  times.error ? "bg-destructive" : "bg-emerald-500",
-                  times.fetching && "animate-pulse",
-                )}
-              />
-              {times.fetching
-                ? "Updating…"
-                : times.updatedAt
-                  ? `Updated ${Math.max(0, Math.round((now - times.updatedAt) / 1000))}s ago`
-                  : ""}
-            </span>
+            <LiveIndicator state={times} now={now} />
             <Button
               variant="ghost"
               size="icon"
