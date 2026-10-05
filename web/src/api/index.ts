@@ -4,8 +4,18 @@ import type { MorningstarApi } from "./types"
 
 export * from "./types"
 
-/** Set `VITE_API_URL` to talk to a real morningstar_rt; mocked data otherwise. */
-const apiUrl = import.meta.env.VITE_API_URL as string | undefined
+declare global {
+  interface Window {
+    MORNINGSTAR_CONFIG?: { apiUrl?: string }
+  }
+}
 
-export const api: MorningstarApi = apiUrl ? httpApi(apiUrl) : mockApi
-export const usingMock = !apiUrl
+/**
+ * Backend base URL: runtime `config.js` first, then build-time `VITE_API_URL`.
+ * Unset or "mock" uses the in-browser mock.
+ */
+const apiUrl =
+  window.MORNINGSTAR_CONFIG?.apiUrl || (import.meta.env.VITE_API_URL as string | undefined) || "mock"
+
+export const usingMock = apiUrl === "mock"
+export const api: MorningstarApi = usingMock ? mockApi : httpApi(apiUrl)

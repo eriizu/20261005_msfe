@@ -15,7 +15,7 @@ import { upcomingDepartures } from "@/lib/departures"
 import { formatClock } from "@/lib/time"
 import { cn } from "@/lib/utils"
 
-const REFRESH_INTERVAL_MS = 20_000
+const REFRESH_INTERVAL_MS = 5_000
 const STOPS_REFRESH_INTERVAL_MS = 30 * 60_000
 const PAGE_SIZE = 12
 
