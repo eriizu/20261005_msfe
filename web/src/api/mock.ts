@@ -80,7 +80,10 @@ function realtimeFor(tripKey: string, aimed: number, now: number) {
   // Like morningstar_rt: whole minutes, truncated toward zero.
   const delay = Math.trunc(delaySeconds / 60)
   const status = delay === 0 ? "on time" : delay > 0 ? `late by ${delay}'` : `early by ${-delay}'`
-  return { expected: aimed + delaySeconds * 1000, status }
+  const expected = aimed + delaySeconds * 1000
+  // Like the backend, realtime stops once the bus has passed.
+  if (expected < now) return null
+  return { expected, status }
 }
 
 function buildStopTimes(stopName: string, now: number): StopTimeDto[] {

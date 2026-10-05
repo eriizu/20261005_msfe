@@ -15,27 +15,32 @@ import type { Departure } from "@/lib/departures"
 import { formatClock, formatTime, secondsUntil } from "@/lib/time"
 import { cn } from "@/lib/utils"
 
-/**
- * Time left before the call: to the second for realtime calls ("4m 07s"),
- * to the minute for scheduled ones ("4 min").
- */
-function waitLabel(seconds: number, at: number, realtime: boolean) {
-  if (seconds <= 0) return "now"
-  if (seconds >= 3600) return realtime ? formatClock(at) : formatTime(at)
-  const minutes = Math.floor(seconds / 60)
-  if (!realtime) return `${minutes} min`
-  const rest = String(seconds % 60).padStart(2, "0")
-  return minutes === 0 ? `${seconds}s` : `${minutes}m ${rest}s`
+/** Under this, a call is "due". */
+const DUE_SECONDS = 60
+/** Under this, "due" flashes. */
+const FLASH_SECONDS = 30
+
+/** Time left before the call, in whole minutes; clock time from an hour out. */
+function waitLabel(seconds: number, at: number) {
+  if (seconds < DUE_SECONDS) return "due"
+  if (seconds >= 3600) return formatTime(at)
+  return `${Math.floor(seconds / 60)} min`
 }
 
-function Eta({ at, now, realtime }: { at: number; now: number; realtime: boolean }) {
-  const seconds = secondsUntil(at, now)
+function Eta({ departure, now }: { departure: Departure; now: number }) {
+  if (departure.passed) {
+    return <span className="font-medium whitespace-nowrap text-muted-foreground">passed</span>
+  }
+  const realtime = departure.expected !== null
+  const seconds = secondsUntil(departure.effective, now)
   const minutes = Math.floor(seconds / 60)
+  // Flips every second, in step with `now`.
+  const dimmed = seconds < FLASH_SECONDS && Math.floor(now / 1000) % 2 === 1
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 font-medium whitespace-nowrap tabular-nums",
-        minutes <= 1 && "text-primary",
+        minutes === 1 && "text-primary",
         minutes > 15 && "text-muted-foreground font-normal",
       )}
     >
@@ -45,7 +50,9 @@ function Eta({ at, now, realtime }: { at: number; now: number; realtime: boolean
           aria-label="Realtime"
         />
       )}
-      {waitLabel(seconds, at, realtime)}
+      <span className={cn(dimmed && "text-foreground/20 motion-reduce:text-inherit")}>
+        {waitLabel(seconds, departure.effective)}
+      </span>
     </span>
   )
 }
@@ -70,14 +77,14 @@ export function Departures({ departures, now }: DeparturesProps) {
     <>
       <ul className="flex flex-col gap-2 md:hidden">
         {departures.map((d) => (
-          <li key={d.dto.aimed_arrival + d.dto.destination}>
-            <Card className="gap-2 px-4 py-3">
+          <li key={d.key}>
+            <Card className={cn("gap-2 px-4 py-3", d.passed && "opacity-60")}>
               <div className="leading-snug font-medium">{d.dto.destination ?? "Unknown"}</div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xl">
-                  <Eta at={d.effective} now={now} realtime={d.expected !== null} />
+                  <Eta departure={d} now={now} />
                 </span>
-                <StatusBadge status={d.dto.status} />
+                <StatusBadge status={d.status} />
               </div>
               <dl className="grid grid-cols-3 gap-x-3 border-t pt-2 text-sm">
                 <Field label="Scheduled">
@@ -115,9 +122,9 @@ export function Departures({ departures, now }: DeparturesProps) {
           </TableHeader>
           <TableBody>
             {departures.map((d) => (
-              <TableRow key={d.dto.aimed_arrival + d.dto.destination}>
+              <TableRow key={d.key} className={cn(d.passed && "opacity-60")}>
                 <TableCell className="pl-4">
-                  <Eta at={d.effective} now={now} realtime={d.expected !== null} />
+                  <Eta departure={d} now={now} />
                 </TableCell>
                 <TableCell className="font-medium">{d.dto.destination ?? "Unknown"}</TableCell>
                 <TableCell
@@ -136,7 +143,7 @@ export function Departures({ departures, now }: DeparturesProps) {
                   )}
                 </TableCell>
                 <TableCell>
-                  <StatusBadge status={d.dto.status} />
+                  <StatusBadge status={d.status} />
                 </TableCell>
                 <TableCell className="pr-4 text-right tabular-nums">
                   {d.dto.stops_to_destination ?? "—"}

@@ -4,6 +4,11 @@ React + shadcn/ui frontend for [morningstar_rt](https://github.com/eriizu/mornin
 pick a stop, see its next calls (scheduled time, realtime time and status when
 available, stops to destination). Refreshes every 5 s while the tab is visible.
 
+Waits are shown in whole minutes, then "due" under a minute (flashing under
+30 s). A bus whose realtime disappears within 2 minutes of its expected time is
+shown as "passed" for 5 minutes after its last realtime value. This history
+lives in the page only: it starts empty on load and when switching stops.
+
 ## Pointing to a backend
 
 The app calls a [morningstar_rt](https://github.com/eriizu/morningstar/tree/main/morningstar_rt)
@@ -53,3 +58,18 @@ docker run -d --name morningstar-web -p 5280:8080 \
 backend. You can also bake in a default with
 `--build-arg VITE_API_URL=…`. Extra `docker run` arguments go to darkhttpd
 (e.g. `--port 9000`).
+
+## Possible improvements
+
+These would need changes in morningstar_rt:
+
+- **Report passed calls.** The frontend infers "passed" from realtime
+  disappearing, and remembers it only in the open page. After a reload or a
+  stop change, buses that already passed show as scheduled again, then vanish
+  a minute after their scheduled time. An early bus can therefore look like it
+  is still coming. A passed flag (or the last realtime time) in `StopTimeDto`
+  would remove the guesswork, including the 2-minute threshold used to tell a
+  pass from a realtime dropout.
+- **Expose a trip ID.** Calls are matched across polls by scheduled time and
+  destination, which breaks if two trips share both or if a scheduled time is
+  revised.
