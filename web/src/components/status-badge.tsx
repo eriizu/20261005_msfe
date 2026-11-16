@@ -39,3 +39,10 @@ export function StatusBadge({ status }: { status: string | null }) {
   const t = tone(status)
   return <Badge className={cn(background[t], textColor[t])}>{status}</Badge>
 }
+
+/** Flags stale realtime; the asterisk refers to the page footnote. */
+export function UnreliableBadge() {
+  return (
+    <Badge className="bg-violet-500/15 text-violet-700 dark:text-violet-400">unreliable*</Badge>
+  )
+}

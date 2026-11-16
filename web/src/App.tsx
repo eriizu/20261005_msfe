@@ -12,7 +12,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useNow } from "@/hooks/use-now"
 import { usePolling } from "@/hooks/use-polling"
 import { useSelectedStop } from "@/hooks/use-selected-stop"
-import { useSightings } from "@/hooks/use-sightings"
 import { upcomingDepartures } from "@/lib/departures"
 import { formatClock } from "@/lib/time"
 import { cn } from "@/lib/utils"
@@ -28,7 +27,6 @@ export default function App() {
   const [stop, setStop] = useSelectedStop()
   const stops = usePolling("served_today", servedToday, STOPS_REFRESH_INTERVAL_MS)
   const times = usePolling(stop, api.stopTimes, REFRESH_INTERVAL_MS)
-  const sightings = useSightings(stop, times.data, times.updatedAt)
   const [shown, setShown] = useState(PAGE_SIZE)
 
   const sortedStops = useMemo(
@@ -36,9 +34,11 @@ export default function App() {
     [stops.data],
   )
   const departures = useMemo(
-    () => (times.data ? upcomingDepartures(times.data, sightings, now) : []),
-    [times.data, sightings, now],
+    () => (times.data ? upcomingDepartures(times.data, now) : []),
+    [times.data, now],
   )
+
+  const visible = departures.slice(0, shown)
 
   const selectStop = (next: string) => {
     setShown(PAGE_SIZE)
@@ -111,7 +111,7 @@ export default function App() {
                 detail={times.error.message}
               />
             )}
-            <Departures departures={departures.slice(0, shown)} now={now} />
+            <Departures departures={visible} now={now} />
             {departures.length > shown && (
               <Button
                 variant="outline"
@@ -124,6 +124,13 @@ export default function App() {
           </>
         )}
       </main>
+
+      {visible.some((d) => d.unreliable) && (
+        <footer className="mt-auto text-sm text-muted-foreground">
+          * Unreliable: the realtime of this bus stopped updating before its expected time,
+          so that time may be off.
+        </footer>
+      )}
     </div>
   )
 }

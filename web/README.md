@@ -7,9 +7,20 @@ A live indicator pulses green on each update, turns orange while a request
 takes over 3 s, and red after a failed one (requests time out after 10 s).
 
 Waits are shown in whole minutes, then "due" under a minute (flashing under
-30 s). A bus whose realtime disappears within 2 minutes of its expected time is
-shown as "passed" for 5 minutes after its last realtime value. This history
-lives in the page only: it starts empty on load and when switching stops.
+30 s). A bus is shown as "passed" for 10 minutes, starting:
+
+- at its scheduled time when it has no realtime;
+- at its realtime time when it has one;
+- at its scheduled time when its realtime is early but stale;
+- at its realtime time when its realtime is late but stale, with an
+  "unreliable" flag and a footnote.
+
+Realtime is stale when the backend last collected it
+(`expected_arrival_collected_at`) more than 2 minutes before its expected time,
+or before now while that time is still ahead: the bus stopped being reported
+while still on its way. A stale estimate that is still to come is flagged
+"unreliable" too. The backend keeps realtime after the upstream drops it, so
+the page holds no history of its own.
 
 ## Pointing to a backend
 
@@ -65,13 +76,6 @@ backend. You can also bake in a default with
 
 These would need changes in morningstar_rt:
 
-- **Report passed calls.** The frontend infers "passed" from realtime
-  disappearing, and remembers it only in the open page. After a reload or a
-  stop change, buses that already passed show as scheduled again, then vanish
-  a minute after their scheduled time. An early bus can therefore look like it
-  is still coming. A passed flag (or the last realtime time) in `StopTimeDto`
-  would remove the guesswork, including the 2-minute threshold used to tell a
-  pass from a realtime dropout.
 - **Expose a trip ID.** Calls are matched across polls by scheduled time and
   destination, which breaks if two trips share both or if a scheduled time is
   revised.

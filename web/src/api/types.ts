@@ -7,6 +7,10 @@
 export interface StopTimeDto {
   /** Real-time estimated call time from Siri. */
   expected_arrival: string | null
+  /** When the backend last got `expected_arrival` from Siri. */
+  expected_arrival_collected_at: string | null
+  /** Siri item identifier of the realtime entry. */
+  realtime_item_identifier: string | null
   /** Theorical call time from GTFS. */
   aimed_arrival: string
   destination: string | null

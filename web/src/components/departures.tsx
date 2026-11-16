@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { RadioIcon } from "lucide-react"
 
-import { StatusBadge } from "@/components/status-badge"
+import { StatusBadge, UnreliableBadge } from "@/components/status-badge"
 import { Card } from "@/components/ui/card"
 import {
   Table,
@@ -29,9 +29,14 @@ function waitLabel(seconds: number, at: number) {
 
 function Eta({ departure, now }: { departure: Departure; now: number }) {
   if (departure.passed) {
-    return <span className="font-medium whitespace-nowrap text-muted-foreground">passed</span>
+    return (
+      <span className="font-medium whitespace-nowrap text-muted-foreground">
+        {departure.unreliable ? "passed?" : "passed"}
+      </span>
+    )
   }
-  const realtime = departure.expected !== null
+  // Stale realtime is no longer live.
+  const realtime = departure.expected !== null && !departure.stale
   const seconds = secondsUntil(departure.effective, now)
   const minutes = Math.floor(seconds / 60)
   // Flips every second, in step with `now`.
@@ -57,6 +62,18 @@ function Eta({ departure, now }: { departure: Departure; now: number }) {
   )
 }
 
+function Status({ departure }: { departure: Departure }) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <StatusBadge status={departure.dto.status} />
+      {departure.unreliable && <UnreliableBadge />}
+    </span>
+  )
+}
+
+/** Passed calls are dimmed. */
+const fade = (d: Departure) => cn(d.passed && "opacity-60")
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
@@ -78,13 +95,13 @@ export function Departures({ departures, now }: DeparturesProps) {
       <ul className="flex flex-col gap-2 md:hidden">
         {departures.map((d) => (
           <li key={d.key}>
-            <Card className={cn("gap-2 px-4 py-3", d.passed && "opacity-60")}>
+            <Card className={cn("gap-2 px-4 py-3", fade(d))}>
               <div className="leading-snug font-medium">{d.dto.destination ?? "Unknown"}</div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xl">
                   <Eta departure={d} now={now} />
                 </span>
-                <StatusBadge status={d.status} />
+                <Status departure={d} />
               </div>
               <dl className="grid grid-cols-3 gap-x-3 border-t pt-2 text-sm">
                 <Field label="Scheduled">
@@ -122,7 +139,7 @@ export function Departures({ departures, now }: DeparturesProps) {
           </TableHeader>
           <TableBody>
             {departures.map((d) => (
-              <TableRow key={d.key} className={cn(d.passed && "opacity-60")}>
+              <TableRow key={d.key} className={fade(d)}>
                 <TableCell className="pl-4">
                   <Eta departure={d} now={now} />
                 </TableCell>
@@ -143,7 +160,7 @@ export function Departures({ departures, now }: DeparturesProps) {
                   )}
                 </TableCell>
                 <TableCell>
-                  <StatusBadge status={d.status} />
+                  <Status departure={d} />
                 </TableCell>
                 <TableCell className="pr-4 text-right tabular-nums">
                   {d.dto.stops_to_destination ?? "—"}

@@ -1,83 +1,79 @@
 import type { StopTimeDto } from "@/api"
 import { parseZoned } from "@/lib/time"
 
-/** How long a bus stays listed as "passed" after its last realtime value. */
-export const PASSED_VISIBLE_MS = 5 * 60_000
+/** How long a bus stays listed after it passed. */
+export const PASSED_VISIBLE_MS = 10 * 60_000
 /**
- * Realtime that disappears while the bus was further away than this is a
- * dropout, not a pass: the call falls back to its scheduled time.
+ * Realtime is stale when it was last collected more than this long before its
+ * expected time (or before now, while that time is still ahead): the bus
+ * stopped being reported while it was still on its way.
  */
-const PASS_THRESHOLD_MS = 2 * 60_000
-/** Scheduled-only calls stay listed this long after their time. */
-const SCHEDULED_GRACE_MS = 60_000
+const STALE_MS = 2 * 60_000
 
 export interface Departure {
   key: string
   dto: StopTimeDto
   aimed: number
-  /** Current realtime estimate, or the last one seen for a passed bus. */
+  /** Realtime estimate, when the backend has one. */
   expected: number | null
-  /** Current realtime status, or the last one seen for a passed bus. */
-  status: string | null
-  /** Expected time when known, aimed time otherwise. */
+  /** Time the wait counts down to and the list is sorted by. */
   effective: number
   passed: boolean
-}
-
-/** Last realtime value seen for a call. */
-export interface Sighting {
-  expected: number
-  status: string | null
-  /** When the backend last reported it (fetch time). */
-  seenAt: number
+  /** The realtime estimate stopped being updated ahead of its expected time. */
+  stale: boolean
+  /** Stale realtime that is still being relied on: shown with a warning. */
+  unreliable: boolean
 }
 
 /** Calls are identified by their scheduled time and destination. */
 export const departureKey = (dto: StopTimeDto) => `${dto.aimed_arrival}|${dto.destination}`
 
-/** Records the realtime values of a fresh response in `history`. */
-export function recordSightings(
-  history: Map<string, Sighting>,
-  dtos: StopTimeDto[],
-  fetchedAt: number,
-) {
-  for (const dto of dtos) {
-    const expected = parseZoned(dto.expected_arrival)
-    if (expected !== null) {
-      history.set(departureKey(dto), { expected, status: dto.status, seenAt: fetchedAt })
-    }
-  }
-}
-
 /**
- * Departures to show, soonest first: buses with realtime, buses that passed
- * (lost realtime close to their call) in the last 5 minutes, and scheduled
- * calls that are not gone for more than a minute.
+ * Departures to show, soonest first, up to 10 minutes after they passed.
+ *
+ * A call passes:
+ * - at its scheduled time when it has no realtime;
+ * - at its realtime time when it has one;
+ * - at its scheduled time when its realtime is early but stale;
+ * - at its realtime time when its realtime is late but stale, flagged as
+ *   unreliable.
  */
-export function upcomingDepartures(
-  dtos: StopTimeDto[],
-  history: ReadonlyMap<string, Sighting>,
-  now: number,
-): Departure[] {
+export function upcomingDepartures(dtos: StopTimeDto[], now: number): Departure[] {
   return dtos
     .flatMap((dto): Departure[] => {
       const aimed = parseZoned(dto.aimed_arrival)
       if (aimed === null) return []
       const key = departureKey(dto)
       const expected = parseZoned(dto.expected_arrival)
-      if (expected !== null) {
-        return [{ key, dto, aimed, expected, status: dto.status, effective: expected, passed: false }]
+      if (expected === null) {
+        if (now - aimed > PASSED_VISIBLE_MS) return []
+        const passed = aimed <= now
+        return [
+          { key, dto, aimed, expected, effective: aimed, passed, stale: false, unreliable: false },
+        ]
       }
 
-      const last = history.get(key)
-      if (last && last.expected - last.seenAt <= PASS_THRESHOLD_MS) {
-        if (now - last.seenAt > PASSED_VISIBLE_MS) return []
-        const { expected, status } = last
-        return [{ key, dto, aimed, expected, status, effective: expected, passed: true }]
-      }
-
-      if (aimed < now - SCHEDULED_GRACE_MS) return []
-      return [{ key, dto, aimed, expected: null, status: null, effective: aimed, passed: false }]
+      const collectedAt = parseZoned(dto.expected_arrival_collected_at)
+      const stale = collectedAt !== null && collectedAt < Math.min(now, expected) - STALE_MS
+      const early = expected < aimed
+      const passAt = stale && early ? aimed : expected
+      if (now - passAt > PASSED_VISIBLE_MS) return []
+      const passed = passAt <= now
+      return [
+        {
+          key,
+          dto,
+          aimed,
+          expected,
+          // A stale early bus falls back to its scheduled time once its
+          // realtime time has gone by.
+          effective: expected > now ? expected : passAt,
+          passed,
+          stale,
+          // An early bus that reached its scheduled time has passed for sure.
+          unreliable: stale && !(passed && early),
+        },
+      ]
     })
     .sort((a, b) => a.effective - b.effective)
 }

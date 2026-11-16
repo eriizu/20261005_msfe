@@ -66,8 +66,11 @@ function hash(s: string): number {
   return h >>> 0
 }
 
-/** Realtime data is only "available" for calls in this window around now. */
-const RT_WINDOW = { before: 10 * MINUTE, after: 75 * MINUTE }
+/**
+ * Realtime starts `after` ahead of a call. Like the backend, the last value is
+ * kept for an hour once the upstream stops reporting the bus.
+ */
+const RT_WINDOW = { before: 60 * MINUTE, after: 75 * MINUTE }
 
 function realtimeFor(tripKey: string, aimed: number, now: number) {
   if (aimed < now - RT_WINDOW.before || aimed > now + RT_WINDOW.after) return null
@@ -75,15 +78,17 @@ function realtimeFor(tripKey: string, aimed: number, now: number) {
   if (h % 7 === 0) return null // some vehicles do not report
   // Base delay in [-90, 420] seconds, drifting by up to a minute every 30 s.
   const base = (h % 511) - 90
-  const drift = (hash(`${tripKey}:${Math.floor(now / 30_000)}`) % 61) - 30
+  // The upstream stops reporting a bus when it passes; a third of them drop
+  // out 3 minutes ahead instead, leaving a stale estimate.
+  const nominal = aimed + base * 1000
+  const collectedAt = Math.min(now, h % 3 === 0 ? nominal - 3 * MINUTE : nominal)
+  const drift = (hash(`${tripKey}:${Math.floor(collectedAt / 30_000)}`) % 61) - 30
   const delaySeconds = base + drift
   // Like morningstar_rt: whole minutes, truncated toward zero.
   const delay = Math.trunc(delaySeconds / 60)
   const status = delay === 0 ? "on time" : delay > 0 ? `late by ${delay}'` : `early by ${-delay}'`
   const expected = aimed + delaySeconds * 1000
-  // Like the backend, realtime stops once the bus has passed.
-  if (expected < now) return null
-  return { expected, status }
+  return { expected, status, collectedAt, id: `MOCK:Item::${h}:LOC` }
 }
 
 function buildStopTimes(stopName: string, now: number): StopTimeDto[] {
@@ -106,6 +111,8 @@ function buildStopTimes(stopName: string, now: number): StopTimeDto[] {
       result.push({
         aimed_arrival: toZoned(aimed),
         expected_arrival: rt ? toZoned(rt.expected) : null,
+        expected_arrival_collected_at: rt ? toZoned(rt.collectedAt) : null,
+        realtime_item_identifier: rt?.id ?? null,
         destination: dir.destination,
         stops_to_destination: dir.stopsToDestination,
         status: rt?.status ?? null,
